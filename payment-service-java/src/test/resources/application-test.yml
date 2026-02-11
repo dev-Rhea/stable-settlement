@@ -1,0 +1,33 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+  sql:
+    init:
+      mode: never
+
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+
+jwt:
+  secret: test-secret-key-for-jwt-that-is-at-least-256-bits-long-for-hmac-sha
+  expiration-ms: 3600000
+
+rate-limit:
+  capacity: 10
+  refill-tokens: 10
+  refill-duration-minutes: 1
+
+outbox:
+  cleanup:
+    cron: "0 0 2 * * *"
+    retention-days: 7
+    batch-size: 1000
