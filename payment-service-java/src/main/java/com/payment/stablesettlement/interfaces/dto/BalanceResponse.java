@@ -7,12 +7,16 @@ import java.math.BigDecimal;
 public record BalanceResponse(
         Long userId,
         BigDecimal balance,
+        BigDecimal heldAmount,
+        BigDecimal availableBalance,
         String currency
 ) {
     public static BalanceResponse from(UserBalance userBalance) {
         return new BalanceResponse(
                 userBalance.getUserId(),
                 userBalance.getBalance(),
+                userBalance.getHeldAmount(),
+                userBalance.getAvailableBalance(),
                 userBalance.getCurrency()
         );
     }

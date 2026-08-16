@@ -104,3 +104,20 @@ CREATE TABLE IF NOT EXISTS merchant_sensitive_data (
     updated_at            DATETIME(6) NOT NULL,
     UNIQUE KEY uk_merchant_sensitive (merchant_id)
 );
+
+ALTER TABLE payment ADD COLUMN IF NOT EXISTS pg_transaction_id VARCHAR(255) UNIQUE;
+ALTER TABLE payment ADD COLUMN IF NOT EXISTS pg_requested_at DATETIME(6);
+
+ALTER TABLE user_balance ADD COLUMN IF NOT EXISTS held_amount DECIMAL(20, 2) NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS balance_hold (
+    id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+    payment_reference VARCHAR(255) NOT NULL UNIQUE,
+    payer_id          BIGINT NOT NULL,
+    amount            DECIMAL(20, 2) NOT NULL,
+    currency          VARCHAR(10) NOT NULL,
+    status            VARCHAR(20) NOT NULL,
+    created_at        DATETIME(6) NOT NULL,
+    updated_at        DATETIME(6),
+    INDEX idx_balance_hold_payer (payer_id)
+    );

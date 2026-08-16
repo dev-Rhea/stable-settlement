@@ -31,3 +31,7 @@ outbox:
     cron: "0 0 2 * * *"
     retention-days: 7
     batch-size: 1000
+mock-pg:
+  base-url: http://localhost:8081
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000

@@ -58,6 +58,11 @@ kms:
   key-id: ${AWS_KMS_KEY_ID}
   endpoint-override: ${AWS_KMS_ENDPOINT}
 
+mock-pg:
+  base-url: ${MOCK_PG_BASE_URL:http://localhost:8080}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
+
 management:
   endpoints:
     web:

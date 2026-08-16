@@ -8,6 +8,7 @@ COPY build.gradle .
 COPY settings.gradle .
 COPY payment-service-java/build.gradle payment-service-java/
 COPY payment-service-java/src payment-service-java/src
+COPY mock-pg-server/build.gralde mock-pg-server/
 
 RUN chmod +x gradlew && ./gradlew :payment-service-java:bootJar -x test --no-daemon
 

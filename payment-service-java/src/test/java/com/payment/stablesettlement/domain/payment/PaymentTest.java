@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -92,6 +93,51 @@ class PaymentTest {
         assertThatThrownBy(() -> payment.complete(FIXED_CLOCK))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("FAILED");
+    }
+
+    @Test
+    @DisplayName("PENDING 상태에서 markPgRequested()하면 pgTransactionId가 부착된다")
+    void markPgRequested() {
+        Payment payment = createPendingPayment();
+
+        payment.markPgRequested("PGTX-001", FIXED_CLOCK);
+
+        assertThat(payment.getPgTransactionId()).isEqualTo("PGTX-001");
+        assertThat(payment.getPgRequestAt()).isEqualTo(LocalDateTime.of(2025, 1, 15, 10, 0, 0));
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+    @Test
+    @DisplayName("COMPLETED 상태에서 markPgRequested()하면 예외가 발생한다")
+    void cannotMarkPgRequestedOnCompletedPayment() {
+        Payment payment = createPendingPayment();
+        payment.complete(FIXED_CLOCK);
+
+        assertThatThrownBy(() -> payment.markPgRequested("PGTX-001", FIXED_CLOCK))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("COMPLETED");
+    }
+
+    @Test
+    @DisplayName("이미 pgTransactionId가 부착된 상태에서 다시 markPgRequested()하면 예외가 발생한다")
+    void cannotMarkPgRequestedTwice() {
+        Payment payment = createPendingPayment();
+        payment.markPgRequested("PGTX-001", FIXED_CLOCK);
+
+        assertThatThrownBy(() -> payment.markPgRequested("PGTX-002", FIXED_CLOCK))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("already requested");
+    }
+
+    @Test
+    @DisplayName("빈 pgTransactionId로 markPgRequested()하면 예외가 발생한다")
+    void cannotMarkPgRequestedWithBlankId() {
+        Payment payment = createPendingPayment();
+
+        assertThatThrownBy(() -> payment.markPgRequested("", FIXED_CLOCK))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> payment.markPgRequested(null, FIXED_CLOCK))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     private Payment createPendingPayment() {

@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import org.apache.kafka.common.protocol.types.Field.Str;
 
 @Entity
 @Table(name = "payment")
@@ -51,6 +52,11 @@ public class Payment {
     @Column(columnDefinition = "TEXT")
     private String transactionSignature;
 
+    @Column(unique = true)
+    private String pgTransactionId;
+
+    private LocalDateTime pgRequestAt;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -66,6 +72,23 @@ public class Payment {
         this.currency = currency;
         this.status = PaymentStatus.PENDING;
         this.createdAt = LocalDateTime.now(clock != null ? clock : Clock.systemDefaultZone());
+    }
+
+    public void markPgRequested(String pgTransactionId, Clock clock) {
+        if(this.status != PaymentStatus.PENDING) {
+            throw new IllegalStateException("Cannot mark PG requested for payment in status: " + this.status);
+        }
+
+        if(this.pgTransactionId != null) {
+            throw new IllegalStateException("PG transaction already requested");
+        }
+
+        if(pgTransactionId == null) {
+            throw new IllegalArgumentException("pgTransactionId must not be blank");
+        }
+
+        this.pgTransactionId = pgTransactionId;
+        this.pgRequestAt = LocalDateTime.now(clock);
     }
 
     public void complete(Clock clock) {

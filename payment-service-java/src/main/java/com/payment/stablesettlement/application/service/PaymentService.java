@@ -59,4 +59,9 @@ public class PaymentService {
                     "Payment processing was interrupted", e);
         }
     }
+
+    public Payment getPayment(String paymentReference) {
+        return paymentRepository.findByPaymentReference(paymentReference)
+            .orElseThrow(() -> new PaymentException("PAYMENT_NOT_FOUND", "payment not found: " + paymentReference));
+    }
 }

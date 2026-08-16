@@ -40,19 +40,10 @@ import static org.mockito.Mockito.when;
 class PaymentTransactionServiceTest {
 
     @Mock
-    private PaymentRepository paymentRepository;
+    private PaymentHoldService paymentHoldService;
 
     @Mock
-    private UserBalanceRepository userBalanceRepository;
-
-    @Mock
-    private OutboxEventRepository outboxEventRepository;
-
-    @Mock
-    private TransactionSigner transactionSigner;
-
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private PgClient pgClient;
 
     private final Clock clock = Clock.fixed(
             Instant.parse("2025-01-15T10:00:00Z"), ZoneId.of("UTC"));
@@ -61,41 +52,41 @@ class PaymentTransactionServiceTest {
 
     private PaymentTransactionService paymentTransactionService;
 
-    private UserBalance senderBalance;
-    private UserBalance receiverBalance;
-
     @BeforeEach
     void setUp() {
         paymentTransactionService = new PaymentTransactionService(
-                paymentRepository, userBalanceRepository, outboxEventRepository,
-                objectMapper, clock, meterRegistry, transactionSigner);
+                paymentHoldService, pgClient, meterRegistry);
+    }
 
-        senderBalance = new UserBalance(1L, new BigDecimal("1000.00"), "USDT");
-        receiverBalance = new UserBalance(2L, new BigDecimal("500.00"), "USDT");
+    private Payment pendingPayment() {
+        return Payment.builder()
+            .paymentReference("PAY_001")
+            .senderId(1L)
+            .receiverId(2L)
+            .amount(new BigDecimal("300.00"))
+            .currency("USDT")
+            .clock(clock)
+            .build();
     }
 
     @Test
-    @DisplayName("정상 결제 실행 - 잔액 차감/증가, Payment COMPLETED, Outbox 저장")
+    @DisplayName("정상 처리 시 가계약 생성 후 PG 등록까지 완료된 PENDING 결제를 반환한다.")
     void executePaymentSuccess() {
         PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
                 new BigDecimal("300.00"), "USDT");
 
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.of(senderBalance));
-        when(userBalanceRepository.findByUserId(2L)).thenReturn(Optional.of(receiverBalance));
-        when(paymentRepository.save(any(Payment.class))).thenAnswer(i -> i.getArgument(0));
-        when(transactionSigner.signTransaction(any(Payment.class))).thenReturn("test-signature");
+        Payment held = pendingPayment();
+        Payment attached = pendingPayment();
+        attached.markPgRequested("PGTX-001", clock);
+
+        when(paymentHoldService.createHold(request)).thenReturn(held);
+        when(pgClient.requestApproval("PAY-001", new BigDecimal("300.00"), "USDT")).thenReturn("PGTX-001");
+        when(paymentHoldService.attachPgTransaction("PAY-001", "PGTX-001")).thenReturn(attached);
 
         Payment result = paymentTransactionService.executePayment(request);
 
-        assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-        assertThat(result.getPaymentReference()).isEqualTo("PAY-001");
-        assertThat(result.getTransactionSignature()).isEqualTo("test-signature");
-        assertThat(senderBalance.getBalance()).isEqualByComparingTo(new BigDecimal("700.00"));
-        assertThat(receiverBalance.getBalance()).isEqualByComparingTo(new BigDecimal("800.00"));
-
-        verify(outboxEventRepository).save(any(OutboxEvent.class));
-        verify(transactionSigner).signTransaction(any(Payment.class));
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(result.getPgTransactionId()).isEqualTo("PGTX-001");
 
         assertThat(meterRegistry.counter("payment.processed", "status", "success").count())
                 .isEqualTo(1.0);

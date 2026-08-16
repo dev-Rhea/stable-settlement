@@ -115,6 +115,8 @@ services:
         condition: service_healthy
       localstack:
         condition: service_healthy
+        mock-pg-server:
+          condition: service_started
     environment:
       # NOTE: useSSL=false is for local Docker network only. Production MUST use SSL.
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stable_settlement}?useSSL=false&allowPublicKeyRetrieval=true
@@ -128,6 +130,7 @@ services:
       AWS_REGION: ap-northeast-2
       AWS_KMS_KEY_ID: alias/stable-settlement-key
       AWS_KMS_ENDPOINT: http://localstack:4566
+      MOCK_PG_BASE_URL: http://mock-pg-server:8081
       SPRING_PROFILES_ACTIVE: dev
     ports:
       - "127.0.0.1:8080:8080"
@@ -142,6 +145,27 @@ services:
         limits:
           memory: 512M
           cpus: '1.5'
+    restart: on-failure
+
+  mock-pg-server:
+    build:
+      context: .
+      dockerfile: mock-pg-server/Dockerfile
+    container_name: stable-settlement-mock-pg
+    environment:
+      PAYMENT_SERVICE_CALLBACK_URL: http://payment-servie:8000/internal/pg-callback
+    ports:
+      - "127.0.0.1:8081:8001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
     restart: on-failure
 
   settlement-processor:

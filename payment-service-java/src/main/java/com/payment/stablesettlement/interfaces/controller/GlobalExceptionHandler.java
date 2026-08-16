@@ -62,6 +62,10 @@ public class GlobalExceptionHandler {
                     .body(ApiResponse.error("Receiver account not found"));
             case "USER_NOT_FOUND" -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("User account not found"));
+            case "PAYMENT_NOT_FOUND" -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Payment not found"));
+            case "PG_CALLBACK_PAYMENT_NOT_FOUND" -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("No payment found for this PG transaction"));
             case "CURRENCY_MISMATCH" -> ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Currency mismatch between accounts"));
             case "SELF_PAYMENT" -> ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -72,6 +76,10 @@ public class GlobalExceptionHandler {
                     .body(ApiResponse.error("Transaction signing failed"));
             case "SERIALIZATION_ERROR" -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Internal server error"));
+            case "PG_REQUEST_FAILED" -> ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error("Failed to reach the payment gateway"));
+            case "HOLD_NOT_FOUND" -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Internal server error"));
             default -> ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Payment processing error"));
         };

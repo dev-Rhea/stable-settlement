@@ -1,40 +1,22 @@
 package com.payment.stablesettlement.application.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.payment.stablesettlement.application.exception.DuplicatePaymentException;
-import com.payment.stablesettlement.application.exception.PaymentException;
-import com.payment.stablesettlement.domain.outbox.OutboxEvent;
-import com.payment.stablesettlement.domain.outbox.OutboxEventRepository;
 import com.payment.stablesettlement.domain.payment.Payment;
-import com.payment.stablesettlement.domain.payment.PaymentRepository;
-import com.payment.stablesettlement.domain.user.UserBalance;
-import com.payment.stablesettlement.domain.user.UserBalanceRepository;
 import com.payment.stablesettlement.interfaces.dto.PaymentRequest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.util.Map;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentTransactionService {
 
-    private final PaymentRepository paymentRepository;
-    private final UserBalanceRepository userBalanceRepository;
-    private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
-    private final Clock clock;
+    private final PaymentHoldService paymentHoldService;
+    private final PgClient pgClient;
     private final MeterRegistry meterRegistry;
-    private final TransactionSigner transactionSigner;
 
-    @Transactional
     public Payment executePayment(PaymentRequest request) {
         Timer.Sample timerSample = Timer.start(meterRegistry);
 
@@ -53,80 +35,19 @@ public class PaymentTransactionService {
     }
 
     private Payment doExecutePayment(PaymentRequest request) {
-        if (paymentRepository.existsByPaymentReference(request.paymentReference())) {
-            throw new DuplicatePaymentException(request.paymentReference());
-        }
+        Payment payment = paymentHoldService.createHold(request);
 
-        UserBalance senderBalance = userBalanceRepository.findByUserId(request.senderId())
-                .orElseThrow(() -> new PaymentException("SENDER_NOT_FOUND",
-                        "Sender not found: " + request.senderId()));
-
-        UserBalance receiverBalance = userBalanceRepository.findByUserId(request.receiverId())
-                .orElseThrow(() -> new PaymentException("RECEIVER_NOT_FOUND",
-                        "Receiver not found: " + request.receiverId()));
-
-        if (!senderBalance.getCurrency().equals(request.currency())) {
-            throw new PaymentException("CURRENCY_MISMATCH",
-                    "Sender balance currency does not match payment currency");
-        }
-        if (!receiverBalance.getCurrency().equals(request.currency())) {
-            throw new PaymentException("CURRENCY_MISMATCH",
-                    "Receiver balance currency does not match payment currency");
-        }
-
-        senderBalance.deduct(request.amount());
-        receiverBalance.credit(request.amount());
-
-        userBalanceRepository.save(senderBalance);
-        userBalanceRepository.save(receiverBalance);
-
-        Payment payment = Payment.builder()
-                .paymentReference(request.paymentReference())
-                .senderId(request.senderId())
-                .receiverId(request.receiverId())
-                .amount(request.amount())
-                .currency(request.currency())
-                .clock(clock)
-                .build();
-        payment.complete(clock);
-
-        String signature = transactionSigner.signTransaction(payment);
-        payment.attachSignature(signature);
-
-        paymentRepository.save(payment);
-
-        saveOutboxEvent(payment);
-
-        log.info("Payment completed: reference={}, amount={}",
-                payment.getPaymentReference(), payment.getAmount());
-
-        return payment;
-    }
-
-    private void saveOutboxEvent(Payment payment) {
         try {
-            String payload = objectMapper.writeValueAsString(Map.of(
-                    "paymentReference", payment.getPaymentReference(),
-                    "senderId", payment.getSenderId(),
-                    "receiverId", payment.getReceiverId(),
-                    "amount", payment.getAmount(),
-                    "currency", payment.getCurrency(),
-                    "status", payment.getStatus().name(),
-                    "transactionSignature", payment.getTransactionSignature() != null
-                            ? payment.getTransactionSignature() : ""
-            ));
-
-            OutboxEvent event = new OutboxEvent(
-                    "Payment",
-                    payment.getPaymentReference(),
-                    "PAYMENT_COMPLETED",
-                    payload,
-                    clock
+            String pgTransactionId = pgClient.requestApproval(
+                payment.getPaymentReference(), payment.getAmount(),
+                payment.getCurrency()
             );
-            outboxEventRepository.save(event);
-        } catch (JsonProcessingException e) {
-            throw new PaymentException("SERIALIZATION_ERROR",
-                    "Failed to serialize payment event", e);
+
+            return paymentHoldService.attachPgTransaction(payment.getPaymentReference(), pgTransactionId);
+        } catch (Exception e) {
+            log.error("PG Initiation failed, releasing hold: reference = {}", payment.getPaymentReference(), e);
+            paymentHoldService.releaseOnInitiationFailure(payment.getPaymentReference(), e.getMessage());
+            throw e;
         }
     }
 }

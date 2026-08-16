@@ -1,0 +1,15 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: mock-pg-server
+
+mock-pg:
+  approval-delay:
+    min-ms: 500
+    max-ms: 5000
+  approval-probability: 0.9
+
+payment-service:
+  callback-url: ${PAYMENT_SERVICE_CALLBACK_URL:http://localhoas:8080/internal/pg-callback}

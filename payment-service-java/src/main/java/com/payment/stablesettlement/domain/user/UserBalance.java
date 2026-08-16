@@ -33,6 +33,9 @@ public class UserBalance {
     @Column(nullable = false)
     private String currency;
 
+    @Column(nullable = false, precision = 20, scale = 2)
+    private BigDecimal heldAmount;
+
     @Version
     private Long version;
 
@@ -40,6 +43,7 @@ public class UserBalance {
         this.userId = userId;
         this.balance = balance;
         this.currency = currency;
+        this.heldAmount = BigDecimal.ZERO;
     }
 
     public void deduct(BigDecimal amount) {
@@ -57,5 +61,47 @@ public class UserBalance {
             throw new IllegalArgumentException("Credit amount must be positive");
         }
         this.balance = this.balance.add(amount);
+    }
+
+    public BigDecimal getAvailableBalance() {
+        return this.balance.subtract(this.heldAmount);
+    }
+
+    public void hold(BigDecimal amount) {
+        if(amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Hold amount must be positive");
+        }
+
+        BigDecimal available = getAvailableBalance();
+        if(available.compareTo(amount) < 0) {
+            throw new InsufficientBalanceException(this.userId, available, amount);
+        }
+        this.heldAmount = this.heldAmount.add(amount);
+    }
+
+    public void releaseHold(BigDecimal amount) {
+        if(amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Release amount must be positive");
+        }
+
+        if(this.heldAmount.compareTo(amount) <= 0) {
+            throw new IllegalStateException("Capture amount more than held");
+        }
+
+        this.heldAmount = this.heldAmount.subtract(amount);
+        this.balance = this.balance.subtract(amount);
+    }
+
+    public void captureHold(BigDecimal amount) {
+        if(amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Capture amount must be positive");
+        }
+
+        if(this.heldAmount.compareTo(amount) < 0) {
+            throw new IllegalStateException("Cannot capture more than held");
+        }
+
+        this.heldAmount = this.heldAmount.subtract(amount);
+        this.balance = this.balance.subtract(amount);
     }
 }

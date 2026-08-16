@@ -15,6 +15,7 @@ public record PaymentResponse(
         String currency,
         PaymentStatus status,
         boolean signed,
+        String pgTransactionId,
         LocalDateTime createdAt
 ) {
     public static PaymentResponse from(Payment payment) {
@@ -28,6 +29,7 @@ public record PaymentResponse(
                 payment.getStatus(),
                 payment.getTransactionSignature() != null
                         && !"UNSIGNED".equals(payment.getTransactionSignature()),
+                payment.getPgTransactionId(),
                 payment.getCreatedAt()
         );
     }
