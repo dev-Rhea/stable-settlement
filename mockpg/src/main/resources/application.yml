@@ -12,4 +12,4 @@ mock-pg:
   approval-probability: 0.9
 
 payment-service:
-  callback-url: ${PAYMENT_SERVICE_CALLBACK_URL:http://localhoas:8080/internal/pg-callback}
+  callback-url: ${PAYMENT_SERVICE_CALLBACK_URL:http://localhost:8080/internal/pg-callback}

@@ -20,6 +20,7 @@ public class PgTransaction {
         this.amount = amount;
         this.currency = currency;
         this.createdAt = createdAt;
+        this.status = PgTransactionStatus.RECEIVED;
     }
 
     public void decide(PgTransactionStatus decision) {
