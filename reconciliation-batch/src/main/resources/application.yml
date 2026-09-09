@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: reconciliation-batch
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-reconciliation.sql
+
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      # 배치는 --spring.batch.job.name=... 으로 실행할 Job 을 지정한다.
+      name: ${BATCH_JOB_NAME:dailyReconciliationJob}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+
+mock-pg:
+  base-url: ${MOCK_PG_BASE_URL:http://localhost:8081}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 5000
+
+reconciliation:
+  notify:
+    kafka-enabled: ${RECONCILIATION_KAFKA_ENABLED:true}
+    topic: ${RECONCILIATION_TOPIC:reconciliation-events}
+
+logging:
+  level:
+    com.payment.reconciliation: INFO

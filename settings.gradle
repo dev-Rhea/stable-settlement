@@ -1,3 +1,4 @@
 rootProject.name = 'stable-settlement'
 include 'payment-service-java'
 include 'mockpg'
+include 'reconciliation-batch'

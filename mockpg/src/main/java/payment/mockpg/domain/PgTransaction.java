@@ -13,6 +13,7 @@ public class PgTransaction {
     private final String currency;
     private final Instant createdAt;
     private PgTransactionStatus status;
+    private Instant decidedAt;
 
     public PgTransaction(String pgTransactionId, String paymentReference, BigDecimal amount, String currency, Instant createdAt) {
         this.pgTransactionId = pgTransactionId;
@@ -28,5 +29,6 @@ public class PgTransaction {
             throw new IllegalStateException("Transaction already decided: " + pgTransactionId);
         }
         this.status = decision;
+        this.decidedAt = Instant.now();
     }
 }

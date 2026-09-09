@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:reconciliation;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-reconciliation.sql,classpath:schema-test-payment.sql
+
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false
+
+mock-pg:
+  base-url: http://localhost:8081
+  connect-timeout-ms: 1000
+  read-timeout-ms: 1000
+
+reconciliation:
+  notify:
+    kafka-enabled: false
+    topic: reconciliation-events
+
+logging:
+  level:
+    org.springframework.batch: WARN

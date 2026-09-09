@@ -115,8 +115,8 @@ services:
         condition: service_healthy
       localstack:
         condition: service_healthy
-        mock-pg-server:
-          condition: service_started
+      mock-pg-server:
+        condition: service_started
     environment:
       # NOTE: useSSL=false is for local Docker network only. Production MUST use SSL.
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stable_settlement}?useSSL=false&allowPublicKeyRetrieval=true
@@ -150,12 +150,12 @@ services:
   mock-pg-server:
     build:
       context: .
-      dockerfile: mock-pg-server/Dockerfile
+      dockerfile: mockpg/Dockerfile
     container_name: stable-settlement-mock-pg
     environment:
-      PAYMENT_SERVICE_CALLBACK_URL: http://payment-servie:8000/internal/pg-callback
+      PAYMENT_SERVICE_CALLBACK_URL: http://payment-service:8080/internal/pg-callback
     ports:
-      - "127.0.0.1:8081:8001"
+      - "127.0.0.1:8081:8081"
     read_only: true
     tmpfs:
       - /tmp
@@ -167,6 +167,40 @@ services:
           memory: 256M
           cpus: '0.5'
     restart: on-failure
+
+  reconciliation-batch:
+    build:
+      context: .
+      dockerfile: reconciliation-batch/Dockerfile
+    container_name: stable-settlement-reconciliation
+    profiles:
+      - batch
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mock-pg-server:
+        condition: service_started
+    environment:
+      # NOTE: useSSL=false is for local Docker network only. Production MUST use SSL.
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stable_settlement}?useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MOCK_PG_BASE_URL: http://mock-pg-server:8081
+      BATCH_JOB_NAME: ${BATCH_JOB_NAME:-dailyReconciliationJob}
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+    restart: "no"
 
   settlement-processor:
     build: ./settlement-processor-python
