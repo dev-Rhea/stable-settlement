@@ -1,43 +1,36 @@
 package com.payment.stablesettlement.application.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.payment.stablesettlement.application.exception.DuplicatePaymentException;
-import com.payment.stablesettlement.application.exception.InsufficientBalanceException;
-import com.payment.stablesettlement.application.exception.PaymentException;
-import com.payment.stablesettlement.domain.outbox.OutboxEvent;
-import com.payment.stablesettlement.domain.outbox.OutboxEventRepository;
-import com.payment.stablesettlement.domain.payment.Payment;
-import com.payment.stablesettlement.domain.payment.PaymentRepository;
-import com.payment.stablesettlement.domain.payment.PaymentStatus;
-import com.payment.stablesettlement.domain.user.UserBalance;
-import com.payment.stablesettlement.domain.user.UserBalanceRepository;
-import com.payment.stablesettlement.interfaces.dto.PaymentRequest;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.payment.stablesettlement.application.exception.DuplicatePaymentException;
+import com.payment.stablesettlement.application.exception.PaymentException;
+import com.payment.stablesettlement.domain.payment.Payment;
+import com.payment.stablesettlement.domain.payment.PaymentStatus;
+import com.payment.stablesettlement.interfaces.dto.PaymentRequest;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class PaymentTransactionServiceTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(
+        Instant.parse("2025-01-15T10:00:00Z"), ZoneId.of("UTC"));
 
     @Mock
     private PaymentHoldService paymentHoldService;
@@ -45,174 +38,88 @@ class PaymentTransactionServiceTest {
     @Mock
     private PgClient pgClient;
 
-    private final Clock clock = Clock.fixed(
-            Instant.parse("2025-01-15T10:00:00Z"), ZoneId.of("UTC"));
-
-    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private MeterRegistry meterRegistry;
 
     private PaymentTransactionService paymentTransactionService;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         paymentTransactionService = new PaymentTransactionService(
-                paymentHoldService, pgClient, meterRegistry);
+            paymentHoldService, pgClient, meterRegistry);
+    }
+
+    private PaymentRequest request() {
+        return new PaymentRequest("PAY-001", 1L, 2L, new BigDecimal("300.00"), "USDT");
     }
 
     private Payment pendingPayment() {
         return Payment.builder()
-            .paymentReference("PAY_001")
+            .paymentReference("PAY-001")
             .senderId(1L)
             .receiverId(2L)
             .amount(new BigDecimal("300.00"))
             .currency("USDT")
-            .clock(clock)
+            .clock(FIXED_CLOCK)
             .build();
     }
 
     @Test
-    @DisplayName("정상 처리 시 가계약 생성 후 PG 등록까지 완료된 PENDING 결제를 반환한다.")
+    @DisplayName("가예약 생성 후 PG 승인 요청까지 마친 PENDING 결제를 반환한다")
     void executePaymentSuccess() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("300.00"), "USDT");
-
+        PaymentRequest request = request();
         Payment held = pendingPayment();
         Payment attached = pendingPayment();
-        attached.markPgRequested("PGTX-001", clock);
+        attached.markPgRequested("PGTX-001", FIXED_CLOCK);
 
         when(paymentHoldService.createHold(request)).thenReturn(held);
-        when(pgClient.requestApproval("PAY-001", new BigDecimal("300.00"), "USDT")).thenReturn("PGTX-001");
+        when(pgClient.requestApproval("PAY-001", new BigDecimal("300.00"), "USDT"))
+            .thenReturn("PGTX-001");
         when(paymentHoldService.attachPgTransaction("PAY-001", "PGTX-001")).thenReturn(attached);
 
         Payment result = paymentTransactionService.executePayment(request);
 
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(result.getPgTransactionId()).isEqualTo("PGTX-001");
-
+        assertThat(result.getPgRequestedAt()).isNotNull();
         assertThat(meterRegistry.counter("payment.processed", "status", "success").count())
-                .isEqualTo(1.0);
+            .isEqualTo(1.0);
     }
 
     @Test
-    @DisplayName("중복 결제 참조 - DuplicatePaymentException")
-    void executePaymentDuplicate() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("100.00"), "USDT");
+    @DisplayName("가예약 생성이 실패하면 PG 승인 요청을 보내지 않는다")
+    void executePaymentHoldFailure() {
+        PaymentRequest request = request();
 
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(true);
+        when(paymentHoldService.createHold(request))
+            .thenThrow(new DuplicatePaymentException("PAY-001"));
 
         assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
-                .isInstanceOf(DuplicatePaymentException.class);
+            .isInstanceOf(DuplicatePaymentException.class);
 
-        verify(userBalanceRepository, never()).findByUserId(any());
-    }
-
-    @Test
-    @DisplayName("송신자를 찾을 수 없음 - PaymentException")
-    void executePaymentSenderNotFound() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("100.00"), "USDT");
-
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
-                .isInstanceOf(PaymentException.class)
-                .hasMessageContaining("Sender not found");
-    }
-
-    @Test
-    @DisplayName("수신자를 찾을 수 없음 - PaymentException")
-    void executePaymentReceiverNotFound() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("100.00"), "USDT");
-
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.of(senderBalance));
-        when(userBalanceRepository.findByUserId(2L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
-                .isInstanceOf(PaymentException.class)
-                .hasMessageContaining("Receiver not found");
-    }
-
-    @Test
-    @DisplayName("잔액 부족 - InsufficientBalanceException")
-    void executePaymentInsufficientBalance() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("5000.00"), "USDT");
-
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.of(senderBalance));
-        when(userBalanceRepository.findByUserId(2L)).thenReturn(Optional.of(receiverBalance));
-
-        assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
-                .isInstanceOf(InsufficientBalanceException.class);
-
-        verify(paymentRepository, never()).save(any(Payment.class));
-    }
-
-    @Test
-    @DisplayName("통화 불일치 - PaymentException (CURRENCY_MISMATCH)")
-    void executePaymentCurrencyMismatch() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("100.00"), "USDC");
-
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.of(senderBalance));
-        when(userBalanceRepository.findByUserId(2L)).thenReturn(Optional.of(receiverBalance));
-
-        assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
-                .isInstanceOf(PaymentException.class)
-                .hasMessageContaining("currency");
-
-        verify(paymentRepository, never()).save(any(Payment.class));
-    }
-
-    @Test
-    @DisplayName("Outbox 이벤트가 올바른 페이로드로 저장된다 (transactionSignature 포함)")
-    void executePaymentOutboxEventPayload() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("100.00"), "USDT");
-
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.of(senderBalance));
-        when(userBalanceRepository.findByUserId(2L)).thenReturn(Optional.of(receiverBalance));
-        when(paymentRepository.save(any(Payment.class))).thenAnswer(i -> i.getArgument(0));
-        when(transactionSigner.signTransaction(any(Payment.class))).thenReturn("sig-abc");
-
-        paymentTransactionService.executePayment(request);
-
-        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
-        verify(outboxEventRepository).save(captor.capture());
-
-        OutboxEvent savedEvent = captor.getValue();
-        assertThat(savedEvent.getAggregateType()).isEqualTo("Payment");
-        assertThat(savedEvent.getAggregateId()).isEqualTo("PAY-001");
-        assertThat(savedEvent.getEventType()).isEqualTo("PAYMENT_COMPLETED");
-        assertThat(savedEvent.getPayload()).contains("PAY-001");
-        assertThat(savedEvent.getPayload()).contains("transactionSignature");
-        assertThat(savedEvent.getPayload()).contains("sig-abc");
-        assertThat(savedEvent.isPublished()).isFalse();
-    }
-
-    @Test
-    @DisplayName("서명 실패 시 PaymentException 전파")
-    void executePaymentSigningFailure() {
-        PaymentRequest request = new PaymentRequest("PAY-001", 1L, 2L,
-                new BigDecimal("100.00"), "USDT");
-
-        when(paymentRepository.existsByPaymentReference("PAY-001")).thenReturn(false);
-        when(userBalanceRepository.findByUserId(1L)).thenReturn(Optional.of(senderBalance));
-        when(userBalanceRepository.findByUserId(2L)).thenReturn(Optional.of(receiverBalance));
-        when(transactionSigner.signTransaction(any(Payment.class)))
-                .thenThrow(new PaymentException("SIGNING_FAILED", "Transaction signing failed"));
-
-        assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
-                .isInstanceOf(PaymentException.class)
-                .extracting(e -> ((PaymentException) e).getErrorCode())
-                .isEqualTo("SIGNING_FAILED");
-
+        verify(pgClient, never()).requestApproval(anyString(), any(), anyString());
+        verify(paymentHoldService, never()).releaseOnInitiationFailure(anyString(), anyString());
         assertThat(meterRegistry.counter("payment.processed", "status", "failure").count())
-                .isEqualTo(1.0);
+            .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("PG 승인 요청이 실패하면 가예약을 해제하고 예외를 전파한다")
+    void executePaymentPgFailureReleasesHold() {
+        PaymentRequest request = request();
+
+        when(paymentHoldService.createHold(request)).thenReturn(pendingPayment());
+        when(pgClient.requestApproval("PAY-001", new BigDecimal("300.00"), "USDT"))
+            .thenThrow(new PaymentException("PG_REQUEST_FAILED", "Failed to reach Mock PG"));
+
+        assertThatThrownBy(() -> paymentTransactionService.executePayment(request))
+            .isInstanceOf(PaymentException.class)
+            .extracting(e -> ((PaymentException) e).getErrorCode())
+            .isEqualTo("PG_REQUEST_FAILED");
+
+        verify(paymentHoldService).releaseOnInitiationFailure("PAY-001", "Failed to reach Mock PG");
+        verify(paymentHoldService, never()).attachPgTransaction(anyString(), anyString());
+        assertThat(meterRegistry.counter("payment.processed", "status", "failure").count())
+            .isEqualTo(1.0);
     }
 }
