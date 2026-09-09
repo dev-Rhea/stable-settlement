@@ -46,7 +46,9 @@ public class PgCallbackTransactionService {
         if(payment.getStatus() != PaymentStatus.PENDING) {
             log.info("Ignoring duplicate/late PG callback: reference = {}, status = {}", payment.getPaymentReference(), payment.getStatus());
 
-            meterRegistry.counter("payment.pg_callback.duration", "status", "duplicate").increment();
+            meterRegistry.counter("payment.pg_callback.processed", "status", "duplicate").increment();
+            timerSample.stop(meterRegistry.timer("payment.pg_callback.duration", "status", "duplicate"));
+            return;
         }
 
         BalanceHold hold = balanceHoldRepository.findByPaymentReference(payment.getPaymentReference())

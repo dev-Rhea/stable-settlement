@@ -103,7 +103,7 @@ class PaymentTest {
         payment.markPgRequested("PGTX-001", FIXED_CLOCK);
 
         assertThat(payment.getPgTransactionId()).isEqualTo("PGTX-001");
-        assertThat(payment.getPgRequestAt()).isEqualTo(LocalDateTime.of(2025, 1, 15, 10, 0, 0));
+        assertThat(payment.getPgRequestedAt()).isEqualTo(LocalDateTime.of(2025, 1, 15, 10, 0, 0));
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
     }
     @Test

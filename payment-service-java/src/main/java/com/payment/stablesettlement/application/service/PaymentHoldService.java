@@ -36,7 +36,7 @@ public class PaymentHoldService {
             .orElseThrow(() -> new PaymentException("SENDER_NOT_FOUND", "sender not found: " + request.senderId()));
 
         UserBalance recieverBalance = userBalanceRepository.findByUserId(request.receiverId())
-            .orElseThrow(() -> new PaymentException("RECEIVED_NOT_FOUND", "Receiver not found: " + request.receiverId()));
+            .orElseThrow(() -> new PaymentException("RECEIVER_NOT_FOUND", "Receiver not found: " + request.receiverId()));
 
         if(!senderBalance.getCurrency().equals(request.currency())) {
             throw new PaymentException("CURRENCY_MISMATCH", "Sender balance currency does not match payment currency");
@@ -77,7 +77,7 @@ public class PaymentHoldService {
     @Transactional
     public Payment attachPgTransaction(String paymentReference, String pgTransactionId) {
         Payment payment = paymentRepository.findByPaymentReference(paymentReference)
-            .orElseThrow(() -> new PaymentException("PAYMENT_NOT_FOUMD", "Payment not found: " + paymentReference));
+            .orElseThrow(() -> new PaymentException("PAYMENT_NOT_FOUND", "Payment not found: " + paymentReference));
 
         payment.markPgRequested(pgTransactionId, clock);
         paymentRepository.save(payment);

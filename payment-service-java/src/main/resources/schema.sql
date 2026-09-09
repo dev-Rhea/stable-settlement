@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS payment (
     status                VARCHAR(20) NOT NULL,
     failure_reason        VARCHAR(500),
     transaction_signature TEXT,
+    pg_transaction_id     VARCHAR(255) UNIQUE,
+    pg_requested_at       DATETIME(6),
     created_at            DATETIME(6) NOT NULL,
     updated_at            DATETIME(6),
     INDEX idx_payment_sender (sender_id),
@@ -17,9 +19,10 @@ CREATE TABLE IF NOT EXISTS payment (
 CREATE TABLE IF NOT EXISTS user_balance (
     id       BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id  BIGINT NOT NULL UNIQUE,
-    balance  DECIMAL(20, 2) NOT NULL,
-    currency VARCHAR(10) NOT NULL,
-    version  BIGINT NOT NULL DEFAULT 0,
+    balance     DECIMAL(20, 2) NOT NULL,
+    currency    VARCHAR(10) NOT NULL,
+    held_amount DECIMAL(20, 2) NOT NULL DEFAULT 0,
+    version     BIGINT NOT NULL DEFAULT 0,
     INDEX idx_balance_user (user_id)
 );
 
@@ -105,10 +108,7 @@ CREATE TABLE IF NOT EXISTS merchant_sensitive_data (
     UNIQUE KEY uk_merchant_sensitive (merchant_id)
 );
 
-ALTER TABLE payment ADD COLUMN IF NOT EXISTS pg_transaction_id VARCHAR(255) UNIQUE;
-ALTER TABLE payment ADD COLUMN IF NOT EXISTS pg_requested_at DATETIME(6);
-
-ALTER TABLE user_balance ADD COLUMN IF NOT EXISTS held_amount DECIMAL(20, 2) NOT NULL DEFAULT 0;
+-- Phase 5: PG 승인 대기 (가예약-확정 2단계 모델)
 
 CREATE TABLE IF NOT EXISTS balance_hold (
     id                BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -120,4 +120,4 @@ CREATE TABLE IF NOT EXISTS balance_hold (
     created_at        DATETIME(6) NOT NULL,
     updated_at        DATETIME(6),
     INDEX idx_balance_hold_payer (payer_id)
-    );
+);

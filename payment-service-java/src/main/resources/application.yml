@@ -59,7 +59,7 @@ kms:
   endpoint-override: ${AWS_KMS_ENDPOINT}
 
 mock-pg:
-  base-url: ${MOCK_PG_BASE_URL:http://localhost:8080}
+  base-url: ${MOCK_PG_BASE_URL:http://localhost:8081}
   connect-timeout-ms: 2000
   read-timeout-ms: 3000
 

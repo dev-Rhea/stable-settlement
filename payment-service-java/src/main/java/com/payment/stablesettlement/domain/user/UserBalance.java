@@ -84,12 +84,11 @@ public class UserBalance {
             throw new IllegalArgumentException("Release amount must be positive");
         }
 
-        if(this.heldAmount.compareTo(amount) <= 0) {
-            throw new IllegalStateException("Capture amount more than held");
+        if(this.heldAmount.compareTo(amount) < 0) {
+            throw new IllegalStateException("Cannot release more than held");
         }
 
         this.heldAmount = this.heldAmount.subtract(amount);
-        this.balance = this.balance.subtract(amount);
     }
 
     public void captureHold(BigDecimal amount) {

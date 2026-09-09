@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class PgCallbackService {
 
-    private static final String LOCK_PREFIX = "payment:lock";
+    private static final String LOCK_PREFIX = "payment:lock:";
     private static final long LOCK_WAIT_TIME = 5;
     private static final long LOCK_LEASE_TIME = 10;
 

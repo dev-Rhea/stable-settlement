@@ -1,6 +1,7 @@
 package com.payment.stablesettlement.domain.hold;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -14,6 +15,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+@Entity
 @Table(name = "balance_hold")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

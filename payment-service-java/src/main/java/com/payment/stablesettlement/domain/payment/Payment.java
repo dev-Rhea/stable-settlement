@@ -16,7 +16,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import org.apache.kafka.common.protocol.types.Field.Str;
 
 @Entity
 @Table(name = "payment")
@@ -55,7 +54,7 @@ public class Payment {
     @Column(unique = true)
     private String pgTransactionId;
 
-    private LocalDateTime pgRequestAt;
+    private LocalDateTime pgRequestedAt;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -83,12 +82,12 @@ public class Payment {
             throw new IllegalStateException("PG transaction already requested");
         }
 
-        if(pgTransactionId == null) {
+        if(pgTransactionId == null || pgTransactionId.isBlank()) {
             throw new IllegalArgumentException("pgTransactionId must not be blank");
         }
 
         this.pgTransactionId = pgTransactionId;
-        this.pgRequestAt = LocalDateTime.now(clock);
+        this.pgRequestedAt = LocalDateTime.now(clock);
     }
 
     public void complete(Clock clock) {
