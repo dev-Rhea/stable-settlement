@@ -1,6 +1,7 @@
 package payment.mockpg.service;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
@@ -12,6 +13,7 @@ import payment.mockpg.config.MockProperties;
 import payment.mockpg.domain.PgTransaction;
 import payment.mockpg.domain.PgTransactionStatus;
 import payment.mockpg.dto.PgApprovalRequest;
+import payment.mockpg.dto.PgStatusResponse;
 import payment.mockpg.store.InMemoryPgTransactionStore;
 
 @Slf4j
@@ -39,6 +41,14 @@ public class PgApprovalService {
         log.info("PG approval requested: pgTransactionID = {}, paymentReference = {}, delayMs = {}", pgTransactionId, request.paymentReference(), delayMs);
 
         return pgTransactionId;
+    }
+
+    public Optional<PgStatusResponse> findStatus(String pgTransactionId) {
+        return transactionStore.find(pgTransactionId)
+            .map(transaction -> new PgStatusResponse(
+                transaction.getPgTransactionId(),
+                transaction.getPaymentReference(),
+                transaction.getStatus()));
     }
 
     private long randomDelayMs() {

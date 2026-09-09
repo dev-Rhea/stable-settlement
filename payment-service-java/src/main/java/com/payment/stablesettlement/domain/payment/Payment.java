@@ -109,6 +109,16 @@ public class Payment {
         this.transactionSignature = transactionSignature;
     }
 
+    public void timeout(String reason, Clock clock) {
+        if (this.status != PaymentStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Cannot time out payment in status: " + this.status);
+        }
+        this.status = PaymentStatus.TIMEOUT;
+        this.failureReason = reason;
+        this.updatedAt = LocalDateTime.now(clock);
+    }
+
     public void fail(String reason, Clock clock) {
         if (this.status != PaymentStatus.PENDING) {
             throw new IllegalStateException(

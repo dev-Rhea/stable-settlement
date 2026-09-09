@@ -15,6 +15,9 @@ import com.payment.stablesettlement.domain.hold.BalanceHoldRepository;
 import com.payment.stablesettlement.domain.hold.HoldStatus;
 import com.payment.stablesettlement.domain.payment.Payment;
 import com.payment.stablesettlement.domain.payment.PaymentRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.payment.stablesettlement.domain.outbox.OutboxEvent;
+import com.payment.stablesettlement.domain.outbox.OutboxEventRepository;
 import com.payment.stablesettlement.domain.payment.PaymentStatus;
 import com.payment.stablesettlement.domain.user.UserBalance;
 import com.payment.stablesettlement.domain.user.UserBalanceRepository;
@@ -47,6 +50,9 @@ class PaymentHoldServiceTest {
     @Mock
     private BalanceHoldRepository balanceHoldRepository;
 
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+
     private PaymentHoldService paymentHoldService;
 
     private UserBalance senderBalance;
@@ -55,7 +61,9 @@ class PaymentHoldServiceTest {
     @BeforeEach
     void setUp() {
         paymentHoldService = new PaymentHoldService(
-            paymentRepository, userBalanceRepository, balanceHoldRepository, FIXED_CLOCK);
+            paymentRepository, userBalanceRepository, balanceHoldRepository,
+            new PaymentOutboxRecorder(outboxEventRepository, new ObjectMapper(), FIXED_CLOCK),
+            FIXED_CLOCK);
         senderBalance = new UserBalance(1L, new BigDecimal("1000.00"), "USDT");
         receiverBalance = new UserBalance(2L, new BigDecimal("500.00"), "USDT");
     }
@@ -97,6 +105,10 @@ class PaymentHoldServiceTest {
         assertThat(captor.getValue().getStatus()).isEqualTo(HoldStatus.HELD);
         assertThat(captor.getValue().getPayerId()).isEqualTo(1L);
         verify(paymentRepository).save(any(Payment.class));
+
+        ArgumentCaptor<OutboxEvent> eventCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxEventRepository).save(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getEventType()).isEqualTo("PAYMENT_PENDING");
     }
 
     @Test
@@ -197,5 +209,9 @@ class PaymentHoldServiceTest {
         assertThat(hold.getStatus()).isEqualTo(HoldStatus.RELEASED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo("Failed to reach Mock PG");
+
+        ArgumentCaptor<OutboxEvent> eventCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxEventRepository).save(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getEventType()).isEqualTo("PAYMENT_FAILED");
     }
 }

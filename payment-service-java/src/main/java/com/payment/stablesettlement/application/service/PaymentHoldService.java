@@ -24,6 +24,7 @@ public class PaymentHoldService {
     private final PaymentRepository paymentRepository;
     private final UserBalanceRepository userBalanceRepository;
     private final BalanceHoldRepository balanceHoldRepository;
+    private final PaymentOutboxRecorder paymentOutboxRecorder;
     private final Clock clock;
 
     @Transactional
@@ -69,6 +70,8 @@ public class PaymentHoldService {
             .build();
         paymentRepository.save(payment);
 
+        paymentOutboxRecorder.record(payment, PaymentEventType.PAYMENT_PENDING);
+
         log.info("Payment hold created: reference = {}, amount = {}", payment.getPaymentReference(), payment.getAmount());
 
         return payment;
@@ -109,6 +112,8 @@ public class PaymentHoldService {
 
         payment.fail(reason, clock);
         paymentRepository.save(payment);
+
+        paymentOutboxRecorder.record(payment, PaymentEventType.PAYMENT_FAILED);
 
         log.warn("Payment initiation failed, hold released: reference={}, reason={}",
             paymentReference, reason);

@@ -69,8 +69,8 @@ class PgCallbackTransactionServiceTest {
         meterRegistry = new SimpleMeterRegistry();
         pgCallbackTransactionService = new PgCallbackTransactionService(
             paymentRepository, balanceHoldRepository, userBalanceRepository,
-            outboxEventRepository, new ObjectMapper(), FIXED_CLOCK, meterRegistry,
-            transactionSigner);
+            new PaymentOutboxRecorder(outboxEventRepository, new ObjectMapper(), FIXED_CLOCK),
+            FIXED_CLOCK, meterRegistry, transactionSigner);
 
         senderBalance = new UserBalance(1L, new BigDecimal("1000.00"), "USDT");
         senderBalance.hold(new BigDecimal("300.00"));

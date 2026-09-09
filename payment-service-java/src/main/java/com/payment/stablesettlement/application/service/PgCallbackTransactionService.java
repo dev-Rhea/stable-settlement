@@ -1,12 +1,8 @@
 package com.payment.stablesettlement.application.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.stablesettlement.application.exception.PaymentException;
 import com.payment.stablesettlement.domain.hold.BalanceHold;
 import com.payment.stablesettlement.domain.hold.BalanceHoldRepository;
-import com.payment.stablesettlement.domain.outbox.OutboxEvent;
-import com.payment.stablesettlement.domain.outbox.OutboxEventRepository;
 import com.payment.stablesettlement.domain.payment.Payment;
 import com.payment.stablesettlement.domain.payment.PaymentRepository;
 import com.payment.stablesettlement.domain.payment.PaymentStatus;
@@ -16,7 +12,6 @@ import com.payment.stablesettlement.interfaces.dto.pg.PgCallbackRequest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,8 +25,7 @@ public class PgCallbackTransactionService {
     private final PaymentRepository paymentRepository;
     private final BalanceHoldRepository balanceHoldRepository;
     private final UserBalanceRepository userBalanceRepository;
-    private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
+    private final PaymentOutboxRecorder paymentOutboxRecorder;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
     private final TransactionSigner transactionSigner;
@@ -92,7 +86,7 @@ public class PgCallbackTransactionService {
         payment.attachSignature(signature);
 
         paymentRepository.save(payment);
-        saveOutboxEvent(payment, "PAYMENT_COMPLETED");
+        paymentOutboxRecorder.record(payment, PaymentEventType.PAYMENT_COMPLETED);
 
         log.info("Payment approved: reference = {}, amount = {}", payment.getPaymentReference(), payment.getAmount());
 
@@ -113,37 +107,11 @@ public class PgCallbackTransactionService {
         payment.fail(reason, clock);
         paymentRepository.save(payment);
 
-        saveOutboxEvent(payment, "PAYMENT_FAILED");
+        paymentOutboxRecorder.record(payment, PaymentEventType.PAYMENT_FAILED);
 
         log.info("Payment rejected: reference = {}, reason = {}", payment.getPaymentReference(),
             reason);
 
         return payment;
     }
-
-    private void saveOutboxEvent(Payment payment, String eventType) {
-        try {
-            String payload = objectMapper.writeValueAsString(Map.of(
-                "paymentReference", payment.getPaymentReference(),
-                "senderId", payment.getSenderId(),
-                "receiverId", payment.getReceiverId(),
-                "amount", payment.getAmount(),
-                "currency", payment.getCurrency(),
-                "status", payment.getStatus(),
-                "transactionSignature", payment.getTransactionSignature() != null ? payment.getTransactionSignature() : ""
-            ));
-
-            OutboxEvent event = new OutboxEvent(
-                "Payment",
-                payment.getPaymentReference(),
-                eventType,
-                payload,
-                clock
-            );
-            outboxEventRepository.save(event);
-        } catch (JsonProcessingException e) {
-            throw new PaymentException("SERIALIZATION_ERROR", "Failed to serialize payment event", e);
-        }
-    }
-
 }

@@ -63,6 +63,12 @@ mock-pg:
   connect-timeout-ms: 2000
   read-timeout-ms: 3000
 
+pg:
+  reconcile:
+    fixed-delay-ms: 10000
+    inquiry-after-seconds: 30
+    give-up-after-seconds: 300
+
 management:
   endpoints:
     web:

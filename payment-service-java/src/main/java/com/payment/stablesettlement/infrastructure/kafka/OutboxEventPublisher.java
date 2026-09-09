@@ -44,6 +44,8 @@ public class OutboxEventPublisher {
                 event.getPayload()
         );
 
+        record.headers().add("event-type", event.getEventType().getBytes(StandardCharsets.UTF_8));
+
         if (kmsKeyId != null && !kmsKeyId.isBlank()) {
             record.headers().add("kms-key-id", kmsKeyId.getBytes(StandardCharsets.UTF_8));
         }
