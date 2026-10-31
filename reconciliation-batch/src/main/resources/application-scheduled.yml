@@ -1,0 +1,14 @@
+# 상주하며 매일 새벽 전날 거래를 대사하는 모드.
+# 실행: java -jar reconciliation-batch.jar --spring.profiles.active=scheduled
+spring:
+  batch:
+    job:
+      enabled: false   # 기동 시 Job을 바로 돌리지 않고 스케줄에 맡긴다
+  main:
+    keep-alive: true   # 웹 서버 없이도 JVM이 스케줄러 스레드로 살아 있도록 유지
+
+reconciliation:
+  schedule:
+    enabled: true
+    cron: ${RECONCILIATION_CRON:0 30 2 * * *}   # 매일 02:30
+    zone: ${RECONCILIATION_ZONE:Asia/Seoul}
