@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
+import org.redisson.api.RedissonClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,8 +85,14 @@ class PaymentIntegrationTest extends TestContainerConfig {
     @Autowired
     private BalanceHoldRepository balanceHoldRepository;
 
+    @Autowired
+    private RedissonClient redissonClient;
+
     @BeforeEach
     void setUp() {
+        // 사용자별 레이트 리밋 버킷(분당 10회)은 Redis에 남아 테스트끼리 공유된다.
+        // DB를 비우듯 버킷도 비워, 앞선 테스트의 요청 수가 다음 테스트를 429로 막지 않게 한다.
+        redissonClient.getKeys().deleteByPattern("rate-limit:*");
         paymentRepository.deleteAll();
         balanceHoldRepository.deleteAll();
         userBalanceRepository.deleteAll();

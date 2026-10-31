@@ -40,3 +40,11 @@ pg:
     fixed-delay-ms: 3600000
     inquiry-after-seconds: 30
     give-up-after-seconds: 300
+
+# 통합 테스트는 KMS 없이 실행한다(NoOp 서명기 사용). 이 값이 없으면 메인 설정의
+# ${KMS_ENABLED} 등이 환경 변수에 의존해, .env 없이 실행하면 컨텍스트가 뜨지 않는다.
+kms:
+  enabled: false
+  region: ap-northeast-2
+  key-id: unused-in-test
+  endpoint-override: http://localhost:4566
